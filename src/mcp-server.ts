@@ -11,17 +11,22 @@ import { humanToRaw } from "./param-maps/index.js";
 // System prompt — prepended to session context responses
 // ============================================================
 
-const SYSTEM_PROMPT = `You are an experienced mixing and mastering engineer working alongside a music producer in their Ableton Live session. You have real-time access to their session via MCP tools.
+const SYSTEM_PROMPT = `You are an experienced mixing and mastering engineer working alongside a music producer in their Ableton Live session. You have real-time access to their session via AbletonMCP tools.
+
+The AbletonMCP Bridge is a Max for Live Audio Effect device already installed in the producer's session. It connects to this MCP server via WebSocket. You do NOT need to guide setup — if you can read session data, the bridge is working.
 
 Guidelines:
-1. Always call get_session_context first to understand the full session before making suggestions.
-2. Be SPECIFIC. Reference exact track names, device names, parameter names, current values, and suggested values.
-3. Prioritize by impact — lead with the highest-leverage change.
-4. You know the producer's full plugin library. When suggesting new devices, prefer plugins they already own. Prefer plugins already in the session's chains before suggesting additions.
-5. Before executing any write operation, clearly state what you'll change and why, and wait for confirmation.
-6. When the producer describes a subjective problem ("muddy", "harsh", "thin"), use analyze_mix and get_spectral_snapshot to ground your response in data.
-7. You can restructure sessions — create groups, change routing, add devices. Always confirm structural changes before executing.
-8. Speak like a knowledgeable colleague, not a textbook. Be direct.`;
+1. Call get_session_context to understand the session. Only call it once per conversation unless the user says they've made changes.
+2. Do NOT automatically call analyze_mix on every message. Only run analysis when the user asks for feedback, describes a problem, or requests a mix review.
+3. Be SPECIFIC. Reference exact track names, device names, parameter values, and suggested values.
+4. Understand that sessions vary wildly. Empty tracks, unused sends, tracks at 0dB, hard-panned pairs — these are all normal production choices, not problems. Don't flag things as issues unless they're actually problematic.
+5. Tracks at unity gain (0dB) with no sends may simply be unused or placeholders — don't treat them as gain staging issues.
+6. Prioritize by impact — lead with the highest-leverage change when giving advice.
+7. When suggesting devices, prefer plugins already in the session, then plugins the producer owns (use get_plugin_library). Don't suggest plugins without checking.
+8. Before executing any write operation, clearly state what you'll change and why, and wait for confirmation.
+9. When the producer describes a subjective problem ("muddy", "harsh", "thin"), THEN use analyze_mix and/or get_spectral_snapshot to ground your response in data.
+10. Speak like a knowledgeable colleague, not a textbook. Be direct and conversational.
+11. If session data is unavailable, simply tell the user the bridge isn't connected. Do NOT fabricate setup instructions, GitHub URLs, or troubleshooting steps.`;
 
 // ============================================================
 // MCP server setup
@@ -38,7 +43,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
   // ----------------------------------------------------------
   server.tool(
     "get_session_context",
-    "Returns a complete semantic snapshot of the current Ableton session: all tracks, groups, return tracks, master track, device chains with parameters in human-readable units, routing, and a pre-analyzed summary. Call this first.",
+    "Returns a snapshot of the current Ableton session: all tracks (names, volumes, panning, mutes, sends, device chains), return tracks, master track, and routing. Call once at the start of a conversation to orient yourself. No need to call again unless the user says the session has changed.",
     {},
     async () => {
       const context = assembleContext(bridge.cache);
@@ -170,7 +175,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
   // ----------------------------------------------------------
   server.tool(
     "analyze_mix",
-    "Runs rule-based analysis and returns potential mix issues: frequency buildup, dynamics problems, routing inefficiencies, headroom concerns. Ordered by impact.",
+    "Runs rule-based heuristic analysis for potential mix issues: frequency buildup, dynamics problems, routing inefficiencies, headroom. Only call when the user asks for mix feedback or describes a specific problem — do NOT call proactively on every message.",
     {},
     async () => {
       const context = assembleContext(bridge.cache);

@@ -19,11 +19,30 @@ export class WsBridge extends EventEmitter {
     isConnected: false,
   };
 
-  start(port: number): void {
-    this.wss = new WebSocketServer({ port });
+  async start(port: number): Promise<void> {
+    // If the port is still held by a previous instance, wait briefly and retry
+    const tryListen = (attempt: number): Promise<WebSocketServer> =>
+      new Promise((resolve, reject) => {
+        const server = new WebSocketServer({ port });
+        server.on("listening", () => resolve(server));
+        server.on("error", (err: NodeJS.ErrnoException) => {
+          server.close();
+          if (err.code === "EADDRINUSE" && attempt < 8) {
+            const delay = Math.min(attempt * 1000, 5000);
+            console.error(
+              `[ws-bridge] Port ${port} in use, retrying in ${delay / 1000}s (attempt ${attempt}/8)...`,
+            );
+            setTimeout(() => tryListen(attempt + 1).then(resolve, reject), delay);
+          } else {
+            reject(err);
+          }
+        });
+      });
+
+    this.wss = await tryListen(1);
 
     this.wss.on("connection", (ws) => {
-      console.log("[ws-bridge] M4L device connected");
+      console.error("[ws-bridge] M4L device connected");
       this.m4lSocket = ws;
       this.cache.isConnected = true;
       this.emit("connected");
@@ -38,7 +57,7 @@ export class WsBridge extends EventEmitter {
       });
 
       ws.on("close", () => {
-        console.log("[ws-bridge] M4L device disconnected");
+        console.error("[ws-bridge] M4L device disconnected");
         this.m4lSocket = null;
         this.cache.isConnected = false;
         this.emit("disconnected");
@@ -49,7 +68,7 @@ export class WsBridge extends EventEmitter {
       });
     });
 
-    console.log(`[ws-bridge] WebSocket server listening on :${port}`);
+    console.error(`[ws-bridge] WebSocket server listening on :${port}`);
   }
 
   private handleMessage(msg: unknown): void {

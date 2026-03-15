@@ -83,10 +83,32 @@ function assembleTrack(
   returnTrackNames: Map<string, string>,
 ): SemanticTrack {
   const sends: Record<string, string> = {};
-  for (const send of track.sends) {
-    const returnName =
-      returnTrackNames.get(send.returnTrackId) ?? send.returnTrackId;
-    sends[returnName] = rawSendToPercent(send.amount);
+  if (Array.isArray(track.sends)) {
+    for (const send of track.sends) {
+      const returnName =
+        returnTrackNames.get(send.returnTrackId) ?? send.returnTrackId;
+      sends[returnName] = rawSendToPercent(send.amount);
+    }
+  }
+
+  // Handle both full device objects and lightweight device name arrays
+  const devices: SemanticDevice[] = Array.isArray(track.devices)
+    ? track.devices.map(assembleDevice)
+    : [];
+
+  // If we only have deviceNames (lightweight snapshot), show them as simple entries
+  const deviceNameList: string[] = (track as any).deviceNames ?? [];
+  if (devices.length === 0 && deviceNameList.length > 0) {
+    for (const dn of deviceNameList) {
+      devices.push({
+        id: dn,
+        name: dn,
+        active: true,
+        isThirdParty: false,
+        parameters: {},
+        observations: [],
+      });
+    }
   }
 
   return {
@@ -100,7 +122,7 @@ function assembleTrack(
     group: track.groupId,
     outputRouting: track.outputRouting,
     sends,
-    devices: track.devices.map(assembleDevice),
+    devices,
   };
 }
 

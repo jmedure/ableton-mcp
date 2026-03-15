@@ -12,7 +12,7 @@ const MCP_PORT = parseInt(process.env.MCP_PORT ?? "3000", 10);
 // ============================================================
 
 const bridge = new WsBridge();
-bridge.start(WS_PORT);
+await bridge.start(WS_PORT);
 
 bridge.on("connected", () => {
   console.log("[main] M4L bridge connected — session data will flow");

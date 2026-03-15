@@ -1,15 +1,38 @@
 {
   "name": "ableton-mcp",
   "version": "0.1.0",
-  "description": "MCP server giving Claude real-time access to Ableton Live sessions",
+  "description": "MCP server giving AI assistants real-time access to Ableton Live sessions",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "ableton-mcp": "dist/stdio.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:stdio": "tsx src/stdio.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:stdio": "node dist/stdio.js",
+    "prepublishOnly": "npm run build",
     "lint": "eslint src/"
   },
+  "keywords": [
+    "mcp",
+    "ableton",
+    "ableton-live",
+    "max-for-live",
+    "ai",
+    "mixing",
+    "music-production",
+    "claude",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "dotenv": "^16.4.7",
