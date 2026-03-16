@@ -11,22 +11,37 @@ import { humanToRaw } from "./param-maps/index.js";
 // System prompt — prepended to session context responses
 // ============================================================
 
-const SYSTEM_PROMPT = `You are an experienced mixing and mastering engineer working alongside a music producer in their Ableton Live session. You have real-time access to their session via AbletonMCP tools.
+const SYSTEM_PROMPT = `You are an experienced mixing and mastering engineer working alongside a music producer in their Ableton Live session. You have real-time access to their session via Talkback MCP tools.
 
-The AbletonMCP Bridge is a Max for Live Audio Effect device already installed in the producer's session. It connects to this MCP server via WebSocket. You do NOT need to guide setup — if you can read session data, the bridge is working.
+The Talkback Bridge is a Max for Live Audio Effect device already installed in the producer's session. It connects to this MCP server via WebSocket. You do NOT need to guide setup — if you can read session data, the bridge is working.
 
 Guidelines:
-1. Call get_session_context to understand the session. Only call it once per conversation unless the user says they've made changes.
-2. Do NOT automatically call analyze_mix on every message. Only run analysis when the user asks for feedback, describes a problem, or requests a mix review.
-3. Be SPECIFIC. Reference exact track names, device names, parameter values, and suggested values.
-4. Understand that sessions vary wildly. Empty tracks, unused sends, tracks at 0dB, hard-panned pairs — these are all normal production choices, not problems. Don't flag things as issues unless they're actually problematic.
-5. Tracks at unity gain (0dB) with no sends may simply be unused or placeholders — don't treat them as gain staging issues.
-6. Prioritize by impact — lead with the highest-leverage change when giving advice.
-7. When suggesting devices, prefer plugins already in the session, then plugins the producer owns (use get_plugin_library). Don't suggest plugins without checking.
-8. Before executing any write operation, clearly state what you'll change and why, and wait for confirmation.
-9. When the producer describes a subjective problem ("muddy", "harsh", "thin"), THEN use analyze_mix and/or get_spectral_snapshot to ground your response in data.
-10. Speak like a knowledgeable colleague, not a textbook. Be direct and conversational.
-11. If session data is unavailable, simply tell the user the bridge isn't connected. Do NOT fabricate setup instructions, GitHub URLs, or troubleshooting steps.`;
+
+SESSION AWARENESS
+1. Call get_session_context once to orient yourself. Only call again if the user says the session has changed.
+2. Do NOT call analyze_mix on every message. Only when the user explicitly asks for mix feedback or describes a problem.
+
+EMPTY TRACKS & NORMAL VARIANCE
+3. Empty tracks, unused sends, tracks at 0dB, hard-panned pairs — all normal production choices, never flag as issues. The only time an empty track matters is if it has active devices AND non-zero output meters (e.g., a vinyl emulation plugin generating noise on a track the producer thinks is silent). Never suggest cleaning up or deleting empty tracks.
+4. Sessions vary wildly between producers. Do not assume any track layout, gain structure, or routing pattern is wrong.
+
+NO OBJECTIVE "GOOD MIX"
+5. A mix is not objectively good or bad. There is no benchmark to optimize toward. When a user says "make it better" or "improve the mix," ask what they mean — louder? cleaner? drums hit harder while vocals stay present? more space? more aggression? The goal is to help the producer overcome technical limitations to achieve THEIR artistic vision, not a textbook standard.
+6. A "technically rough" mix may be exactly right for the song's emotional intent. Respect that. Never assume a non-standard setting is a mistake.
+
+PARAMETER CHANGES REQUIRE CONSENT
+7. NEVER change a parameter without explicit user approval. Before any write operation, present the full plan: track name, device name, parameter name, current value → proposed value, and why. Wait for a clear "yes." If the user modifies the plan, re-present the updated changes and confirm again before executing. Never batch-execute changes without per-change approval.
+
+FREQUENCY ANALYSIS
+8. Your primary frequency insight comes from reading device parameters — EQ curves, filter cutoffs, compressor settings, device chains. Use get_track_details to read these. This works without playback and covers most mixing advice.
+9. Spectral analysis (get_spectral_snapshot) is a secondary verification tool. It captures ~2 seconds of live audio from the master bus at the moment of capture. Transport must be playing. Use it only to confirm suspicions or detect issues invisible in device parameters (masking between tracks, phase cancellation, unexpected resonances). It is a microscope on a moment, not a full-song analyzer.
+
+COMMUNICATION
+10. Be specific — reference exact track names, device names, parameter values, and suggested values.
+11. When suggesting devices, prefer plugins already in the session, then plugins the producer owns (use get_plugin_library). Don't suggest plugins without checking availability.
+12. Speak like a knowledgeable colleague, not a textbook. Be direct and conversational. Prioritize by impact — lead with the highest-leverage suggestion.
+13. When the producer describes a subjective problem ("muddy", "harsh", "thin"), use get_track_details to read device parameters on the relevant tracks BEFORE reaching for analyze_mix or spectral.
+14. If session data is unavailable, simply say the bridge isn't connected. Do NOT fabricate setup instructions, GitHub URLs, or troubleshooting steps.`;
 
 // ============================================================
 // MCP server setup
@@ -34,7 +49,7 @@ Guidelines:
 
 export function createMcpServer(bridge: WsBridge): McpServer {
   const server = new McpServer({
-    name: "ableton-mcp",
+    name: "talkback-mcp",
     version: "0.1.0",
   });
 
@@ -52,7 +67,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
           content: [
             {
               type: "text" as const,
-              text: "No session data available. Is the AbletonMCP Bridge device loaded in Ableton and is the WebSocket connection active?",
+              text: "No session data available. Is the Talkback Bridge device loaded in Ableton and is the WebSocket connection active?",
             },
           ],
         };
@@ -114,7 +129,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
   // ----------------------------------------------------------
   server.tool(
     "get_spectral_snapshot",
-    "Returns spectral analysis data — peak and RMS levels across frequency bands. Use to understand tonal character or diagnose frequency-domain issues.",
+    "Captures ~2 seconds of live audio from the master bus and returns peak/RMS levels across frequency bands. Transport MUST be playing — coordinate with the user on which section to analyze (e.g., 'play the chorus'). This is a point-in-time microscope, not a full-song analyzer. Use as a secondary check to verify what device parameter analysis suggests, or to detect issues invisible in the device chain (masking, phase, resonances). For most frequency questions, reading EQ and filter parameters via get_track_details is more informative.",
     {
       source: z
         .string()
@@ -175,7 +190,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
   // ----------------------------------------------------------
   server.tool(
     "analyze_mix",
-    "Runs rule-based heuristic analysis for potential mix issues: frequency buildup, dynamics problems, routing inefficiencies, headroom. Only call when the user asks for mix feedback or describes a specific problem — do NOT call proactively on every message.",
+    "Runs rule-based heuristic analysis for potential mix issues: frequency buildup, dynamics problems, routing inefficiencies, headroom. Only call when the user explicitly asks for mix feedback or describes a specific problem — do NOT call proactively. Findings are suggestions to consider, not problems to fix. Mix quality is subjective — frame results in context of what the user is trying to achieve. A technically 'imperfect' setting may be an intentional artistic choice.",
     {},
     async () => {
       const context = assembleContext(bridge.cache);
@@ -214,7 +229,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
   // ----------------------------------------------------------
   server.tool(
     "set_device_parameter",
-    "Sets a device parameter to a new value. Pass values in human-readable units (dB, ms, Hz, ratio, percent). Always explain the change before calling.",
+    "Sets a device parameter to a new value. Pass values in human-readable units (dB, ms, Hz, ratio, percent). NEVER call without explicit user approval. Present the planned change with current → proposed values first, wait for a clear 'yes', then execute. If the user modifies the plan, re-present and re-confirm before executing.",
     {
       track_name: z.string(),
       device_name: z.string(),
@@ -301,7 +316,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
   // ----------------------------------------------------------
   server.tool(
     "toggle_device_bypass",
-    "Enables or bypasses a device on a track. Useful for A/B comparison.",
+    "Enables or bypasses a device on a track. Useful for A/B comparison. Always confirm with the user before toggling.",
     {
       track_name: z.string(),
       device_name: z.string(),
@@ -482,6 +497,42 @@ export function createMcpServer(bridge: WsBridge): McpServer {
             text: `Routing ${track_name} output to ${output_target}.`,
           },
         ],
+      };
+    },
+  );
+
+  // ----------------------------------------------------------
+  // Tool: get_bridge_health
+  // ----------------------------------------------------------
+  server.tool(
+    "get_bridge_health",
+    "Returns performance metrics from the M4L bridge device: poll execution time (avg/max), WebSocket message size, LiveAPI cache size, and track count. Use to diagnose performance issues or confirm the device is running efficiently.",
+    {},
+    async () => {
+      if (!bridge.cache.isConnected) {
+        return {
+          content: [{ type: "text" as const, text: "M4L bridge not connected." }],
+        };
+      }
+
+      const p = bridge.perf;
+      const snapshotKb = (p.snapshotBytes / 1024).toFixed(1);
+
+      const lines = [
+        `Poll time: ${p.lastPollMs}ms (avg ${p.avgPollMs}ms, max ${p.maxPollMs}ms over ${p.pollCount} polls)`,
+        `Snapshot size: ${snapshotKb}KB (${p.snapshotBytes} bytes)`,
+        `Tracks in snapshot: ${p.trackCount}`,
+        `LiveAPI cache: ${p.apiCacheSize} objects`,
+        `Last poll was structure refresh: ${p.lastStructureRefresh}`,
+        ``,
+        `Benchmarks:`,
+        `  Poll time < 50ms = excellent, 50-200ms = acceptable, >200ms = needs work`,
+        `  Snapshot < 30KB = good, 30-100KB = fine at 10s intervals, >100KB = large`,
+        `  Cache should stabilize after first few polls — growth = potential leak`,
+      ];
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
       };
     },
   );

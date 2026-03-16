@@ -38,5 +38,5 @@ const mcpServer = createMcpServer(bridge);
 const transport = new StdioServerTransport();
 
 await mcpServer.connect(transport);
-console.error("[stdio] AbletonMCP server running via stdio");
+console.error("[stdio] Talkback MCP server running via stdio");
 console.error(`[stdio] WebSocket bridge: ws://localhost:${WS_PORT}`);

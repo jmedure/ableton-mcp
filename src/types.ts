@@ -201,6 +201,21 @@ export interface HeuristicFinding {
 }
 
 // ============================================================
+// Bridge performance metrics
+// ============================================================
+
+export interface BridgePerf {
+  lastPollMs: number;       // most recent bang() execution time
+  avgPollMs: number;        // running average
+  maxPollMs: number;        // worst case since device load
+  pollCount: number;        // total polls since device load
+  apiCacheSize: number;     // LiveAPI objects held in memory
+  trackCount: number;       // total tracks in snapshot
+  snapshotBytes: number;    // last WebSocket message size
+  lastStructureRefresh: boolean; // was the last poll a full structure read
+}
+
+// ============================================================
 // Session cache
 // ============================================================
 

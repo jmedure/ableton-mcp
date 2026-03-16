@@ -1,11 +1,11 @@
 {
-  "name": "ableton-mcp",
+  "name": "talkback-mcp",
   "version": "0.1.0",
   "description": "MCP server giving AI assistants real-time access to Ableton Live sessions",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "ableton-mcp": "dist/stdio.js"
+    "talkback-mcp": "dist/stdio.js"
   },
   "files": [
     "dist",
@@ -23,6 +23,7 @@
   },
   "keywords": [
     "mcp",
+    "talkback",
     "ableton",
     "ableton-live",
     "max-for-live",

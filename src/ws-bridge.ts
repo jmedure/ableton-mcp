@@ -6,6 +6,7 @@ import type {
   SessionCache,
   BridgeCommand,
   SpectralSnapshot,
+  BridgePerf,
 } from "./types.js";
 
 export class WsBridge extends EventEmitter {
@@ -18,6 +19,17 @@ export class WsBridge extends EventEmitter {
     raw: null,
     lastUpdated: null,
     isConnected: false,
+  };
+
+  readonly perf: BridgePerf = {
+    lastPollMs: 0,
+    avgPollMs: 0,
+    maxPollMs: 0,
+    pollCount: 0,
+    apiCacheSize: 0,
+    trackCount: 0,
+    snapshotBytes: 0,
+    lastStructureRefresh: false,
   };
 
   async start(port: number): Promise<void> {
@@ -56,8 +68,9 @@ export class WsBridge extends EventEmitter {
 
       ws.on("message", (data) => {
         try {
-          const msg = JSON.parse(data.toString());
-          this.handleMessage(msg);
+          const raw = data.toString();
+          const msg = JSON.parse(raw);
+          this.handleMessage(msg, Buffer.byteLength(raw, "utf8"));
         } catch (err) {
           console.error("[ws-bridge] Failed to parse message:", err);
         }
@@ -78,13 +91,26 @@ export class WsBridge extends EventEmitter {
     console.error(`[ws-bridge] WebSocket server listening on :${port}`);
   }
 
-  private handleMessage(msg: unknown): void {
-    const typed = msg as { type: string };
+  private handleMessage(msg: unknown, byteSize: number): void {
+    const typed = msg as { type: string; _perf?: Record<string, number | boolean> };
 
     if (typed.type === "session_snapshot") {
       const snapshot = msg as RawSessionSnapshot;
       this.cache.raw = snapshot.payload;
       this.cache.lastUpdated = snapshot.timestamp;
+
+      // Capture perf metrics from the device
+      if (typed._perf) {
+        this.perf.lastPollMs = (typed._perf.pollMs as number) ?? 0;
+        this.perf.avgPollMs = (typed._perf.pollAvgMs as number) ?? 0;
+        this.perf.maxPollMs = (typed._perf.pollMaxMs as number) ?? 0;
+        this.perf.pollCount = (typed._perf.pollCount as number) ?? 0;
+        this.perf.apiCacheSize = (typed._perf.apiCacheSize as number) ?? 0;
+        this.perf.trackCount = (typed._perf.trackCount as number) ?? 0;
+        this.perf.lastStructureRefresh = (typed._perf.wasStructureRefresh as boolean) ?? false;
+      }
+      this.perf.snapshotBytes = byteSize;
+
       this.emit("session_updated", snapshot.payload);
     } else if (typed.type === "spectral_snapshot") {
       const spectral = msg as { type: string; data: SpectralSnapshot };
