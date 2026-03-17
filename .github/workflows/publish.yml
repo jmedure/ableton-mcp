@@ -51,8 +51,10 @@ jobs:
           VERSION="${{ steps.version.outputs.local }}"
           DATE=$(date -u +%Y-%m-%d)
 
-          # Get commits since the previous tag (skip current tag)
-          PREV_TAG=$(git tag --sort=-v:refname | grep -v "v$VERSION" | head -1)
+          # Get commits since the previous tag
+          # Current version tag doesn't exist yet (tagging happens after this step)
+          # So the most recent tag IS the previous version
+          PREV_TAG=$(git tag --sort=-v:refname | head -1)
           if [ -z "$PREV_TAG" ]; then
             # First release — all commits
             COMMITS=$(git log --pretty=format:"%s" HEAD)

@@ -61,26 +61,39 @@ export class WsBridge extends EventEmitter {
     });
 
     this.wss.on("connection", (ws) => {
+      // If another socket is already connected, close it gracefully
+      if (this.m4lSocket && this.m4lSocket.readyState === WebSocket.OPEN) {
+        console.error("[ws-bridge] Replacing existing M4L connection with new one");
+        this.m4lSocket.close();
+      }
+
       console.error("[ws-bridge] M4L device connected");
       this.m4lSocket = ws;
       this.cache.isConnected = true;
       this.emit("connected");
 
-      ws.on("message", (data) => {
+      ws.on("message", (data: Buffer) => {
         try {
           const raw = data.toString();
+          const byteSize = data.length;
           const msg = JSON.parse(raw);
-          this.handleMessage(msg, Buffer.byteLength(raw, "utf8"));
+          this.handleMessage(msg, byteSize);
         } catch (err) {
-          console.error("[ws-bridge] Failed to parse message:", err);
+          const raw = data.toString();
+          console.error(`[ws-bridge] Failed to parse message (${raw.length} chars): ${(err as Error).message}`);
         }
       });
 
       ws.on("close", () => {
-        console.error("[ws-bridge] M4L device disconnected");
-        this.m4lSocket = null;
-        this.cache.isConnected = false;
-        this.emit("disconnected");
+        // Only update state if this is still the active socket
+        if (this.m4lSocket === ws) {
+          console.error("[ws-bridge] M4L device disconnected");
+          this.m4lSocket = null;
+          this.cache.isConnected = false;
+          this.emit("disconnected");
+        } else {
+          console.error("[ws-bridge] Stale M4L connection closed (already replaced)");
+        }
       });
 
       ws.on("error", (err) => {
