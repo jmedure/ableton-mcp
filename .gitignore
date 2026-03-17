@@ -3,3 +3,4 @@ dist/
 .env
 *.tsbuildinfo
 .DS_Store
+.mcpregistry_*

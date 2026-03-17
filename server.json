@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmedure/talkback",
-  "description": "MCP server giving AI assistants real-time access to Ableton Live sessions — read tracks, devices, meters, routing, make parameter changes, run spectral analysis, and get mix feedback.",
+  "description": "Chat with your Ableton session in real-time.",
   "repository": {
     "url": "https://github.com/jmedure/talkback-mcp",
     "source": "github"
   },
-  "version": "0.1.2",
+  "version": "0.1.3",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "talkback-mcp",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "transport": {
         "type": "stdio"
       },
