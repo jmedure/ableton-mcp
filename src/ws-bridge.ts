@@ -61,10 +61,9 @@ export class WsBridge extends EventEmitter {
     });
 
     this.wss.on("connection", (ws) => {
-      // If another socket is already connected, close it gracefully
+      // Replace reference without closing — closing triggers M4L reconnect loop
       if (this.m4lSocket && this.m4lSocket.readyState === WebSocket.OPEN) {
-        console.error("[ws-bridge] Replacing existing M4L connection with new one");
-        this.m4lSocket.close();
+        console.error("[ws-bridge] Replacing existing M4L connection (letting old one expire)");
       }
 
       console.error("[ws-bridge] M4L device connected");
