@@ -1,70 +1,104 @@
-# Talkback MCP
+# talkback mcp
 
-An MCP server that gives AI assistants real-time access to Ableton Live sessions. Read track data, analyze mixes, adjust parameters, and get spectral snapshots — all through natural conversation.
+Chat with your Ableton session in natural language. Go deeper in your mix, make it sound like it does in your head, and finally understand compression... jk no one can teach you that.
+
+Talkback is an MCP server and Max for Live device that gives AI assistants real-time access to your Ableton Live session — read tracks, adjust parameters, analyze your mix, and get spectral snapshots, all through conversation.
+
+**[talkback.fm](https://talkback.fm)** &nbsp;·&nbsp; **[Docs](https://talkback.fm/docs/getting-started)** &nbsp;·&nbsp; **[Changelog](https://talkback.fm/docs/changelog)**
 
 ## How it works
-
-Talkback has two parts:
-
-1. **Talkback MCP** (this package) — an MCP server that exposes Ableton session data and controls as tools
-2. **[Talkback Bridge](https://github.com/jmedure/talkback-mcp-bridge)** — a Max for Live device that reads Ableton's Live Object Model and streams it to the MCP server over WebSocket
 
 ```
 Ableton Live ↔ M4L Bridge ↔ WebSocket ↔ MCP Server ↔ Claude / Cursor / etc.
 ```
 
+1. **talkback bridge** — a Max for Live device on your master track that reads the Live Object Model and streams session data over WebSocket
+2. **talkback-mcp** (this package) — an MCP server that exposes your session as tools any LLM can use
+
 ## Quick start
 
-### 1. Install the MCP server
+### 1. Install the Max for Live device
 
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Download [talkback-bridge-v1.2.amxd](https://talkback.fm/downloads/talkback-bridge-v1.2.amxd) and drop it onto your **master track** in Ableton. Make sure the device is toggled on.
+
+### 2. Add the MCP server
+
+Talkback requires a **desktop MCP client** — it runs locally on your machine and connects to Ableton over WebSocket. It does not work with claude.ai in the browser (web chat doesn't support local MCP servers yet).
+
+<details>
+<summary><b>Claude Desktop</b> (recommended)</summary>
+
+[Download Claude Desktop](https://claude.ai/download), then add to your config:
+
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+`%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 
 ```json
 {
   "mcpServers": {
     "talkback-mcp": {
       "command": "npx",
-      "args": ["talkback-mcp"],
+      "args": ["-y", "talkback-mcp"],
       "env": { "WS_PORT": "8765" }
     }
   }
 }
 ```
 
-Or for Claude Code:
+Restart Claude Desktop after saving.
+</details>
+
+<details>
+<summary>Claude Code</summary>
 
 ```bash
-claude mcp add talkback-mcp -- npx talkback-mcp
+claude mcp add --transport stdio talkback-mcp -- npx -y talkback-mcp
 ```
+</details>
 
-### 2. Install the bridge
+<details>
+<summary>Other MCP clients (Cursor, Windsurf, etc.)</summary>
 
-Download the latest `.amxd` from [talkback-mcp-bridge releases](https://github.com/jmedure/talkback-mcp-bridge/releases) and drop it onto any track in your Ableton session. The bridge connects automatically.
+Point your client at `npx -y talkback-mcp` as the server command with `WS_PORT=8765` as an environment variable.
 
-### 3. Start mixing
+Or use [add-mcp](https://github.com/nichochar/add-mcp) to auto-configure all your installed agents:
 
-Ask Claude about your session. The tools handle the rest.
+```bash
+npx add-mcp "npx -y talkback-mcp"
+```
+</details>
+
+### 3. Start chatting
+
+Open your LLM and start asking about your session:
+
+- *"What's going on in my session?"*
+- *"My bass sounds muddy, can you help?"*
+- *"Cut 3 dB at 300 Hz on the vocal EQ"*
+- *"Does my mix have any obvious problems?"*
+
+Your LLM will ask for approval before making any parameter changes. Undo always works.
 
 ## Tools
 
-| Tool | Description |
+| Tool | What it does |
 |------|-------------|
-| `get_session_context` | Full session snapshot — tracks, volumes, panning, sends, devices, routing |
-| `get_track_details` | Deep dive into a specific track's device chain and parameters |
-| `get_spectral_snapshot` | ~2 second spectral capture from the master bus (requires playback) |
-| `get_plugin_library` | Lists all installed AU/VST3 plugins on the system |
-| `analyze_mix` | Rule-based heuristic analysis for common mix issues |
-| `set_device_parameter` | Adjust a device parameter (requires user consent) |
-| `toggle_device_bypass` | Enable or bypass a device for A/B comparison |
-| `create_group_track` | Group tracks together |
-| `set_track_routing` | Change a track's output routing |
-| `get_bridge_health` | Performance metrics from the M4L bridge |
+| `get_session_context` | Reads your full session — tracks, volumes, panning, mutes, sends, devices, routing |
+| `get_track_details` | Deep-dives a single track with every device parameter in human-readable units |
+| `get_spectral_snapshot` | Captures ~2s of live audio from master bus with peak/RMS per frequency band |
+| `get_plugin_library` | Lists all installed AU and VST3 plugins on your system |
+| `analyze_mix` | Runs heuristic checks for frequency buildup, dynamics, headroom, and routing issues |
+| `set_device_parameter` | Changes a device parameter using human-readable units (dB, ms, Hz, etc.) |
+| `toggle_device_bypass` | Enables or bypasses a device for A/B comparison |
+| `create_group_track` | Creates a new group track containing specified tracks |
+| `set_track_routing` | Changes a track's output routing to another track or bus |
+| `get_bridge_health` | Returns bridge performance metrics from the M4L device |
 
 ## Requirements
 
 - Ableton Live 11+ with Max for Live
 - Node.js 18+
-- An MCP client (Claude Desktop, Claude Code, Cursor, etc.)
+- A desktop MCP client — [Claude Desktop](https://claude.ai/download) (recommended), Claude Code, Cursor, or similar
 
 ## Environment variables
 
