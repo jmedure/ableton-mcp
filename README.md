@@ -19,7 +19,7 @@ Ableton Live ↔ M4L Bridge ↔ WebSocket ↔ MCP Server ↔ Claude / Cursor / e
 
 ### 1. Install the Max for Live device
 
-Download [talkback-bridge-v1.2.amxd](https://talkback.createwcare.com/downloads/talkback-bridge-v1.2.amxd) and drop it onto your **master track** in Ableton. Make sure the device is toggled on.
+Download [talkback-bridge-v1.5.amxd](https://talkback.createwcare.com/downloads/talkback-bridge-v1.5.amxd) and drop it onto your **master track** in Ableton. Make sure the device is toggled on.
 
 ### 2. Add the MCP server
 
