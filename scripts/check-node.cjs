@@ -22,7 +22,7 @@ if (major < 18) {
       "To fix this, use the full path to npx in your MCP client config.\n" +
       "Run `which npx` in Terminal to find your path, then update:\n\n" +
       '  "command": "/Users/YOU/.nvm/versions/node/v22.x.x/bin/npx"\n\n' +
-      "See: https://talkback.dev/docs/troubleshooting\n\n"
+      "See: https://talkback.createwcare.com/docs/troubleshooting\n\n"
   );
   process.exit(1);
 }
