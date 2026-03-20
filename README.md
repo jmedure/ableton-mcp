@@ -46,6 +46,8 @@ Talkback requires a **desktop MCP client** — it runs locally on your machine a
 ```
 
 Restart Claude Desktop after saving.
+
+> **Using nvm or fnm?** Claude Desktop doesn't load your shell profile, so it may pick up an old system Node. Use the full path to `npx` instead — run `which npx` in Terminal, then set that as `"command"` in the config above. See [troubleshooting](https://talkback.createwcare.com/docs/troubleshooting) for details.
 </details>
 
 <details>

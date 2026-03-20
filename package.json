@@ -1,6 +1,6 @@
 {
   "name": "talkback-mcp",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "MCP server giving AI assistants real-time access to Ableton Live sessions",
   "mcpName": "io.github.jmedure/talkback",
   "repository": {
@@ -10,7 +10,7 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "talkback-mcp": "dist/stdio.js"
+    "talkback-mcp": "dist/check-node.cjs"
   },
   "files": [
     "dist",
@@ -20,7 +20,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:stdio": "tsx src/stdio.ts",
-    "build": "tsc",
+    "build": "tsc && cp scripts/check-node.cjs dist/check-node.cjs",
     "start": "node dist/index.js",
     "start:stdio": "node dist/stdio.js",
     "prepublishOnly": "npm run build",
@@ -38,6 +38,9 @@
     "claude",
     "model-context-protocol"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "license": "PolyForm-Shield-1.0.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
