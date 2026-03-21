@@ -64,8 +64,6 @@ Restart Claude Desktop after saving.
 ```bash
 claude mcp add --transport stdio talkback-mcp -- npx -y talkback-mcp
 ```
-
-If you've cloned the repo, run `/setup` in Claude Code for an interactive walkthrough that checks your environment and configures everything.
 </details>
 
 <details>
