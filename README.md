@@ -23,6 +23,14 @@ The fastest way to get set up — installs the MCP server and configures Claude 
 curl -fsSL https://talkback.createwcare.com/install.sh | bash
 ```
 
+Already in an AI agent? Let it set things up for you:
+
+```bash
+npx skills add jmedure/talkback-mcp
+```
+
+Then ask your agent: *"Help me set up talkback"*
+
 Requires [Node.js 18+](https://nodejs.org). See the [full setup guide](https://talkback.createwcare.com/docs/getting-started) for more options.
 
 ### 1. Install the Max for Live device
