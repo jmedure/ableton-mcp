@@ -46,7 +46,7 @@ If the file has existing entries, merge — don't overwrite them.
 
 ### 5. Verify the connection
 Tell the user:
-- Open Ableton Live with the talkback M4L device on the master track (download from https://talkback.createwcare.com/docs/getting-started if needed)
+- Open Ableton Live with the talkback M4L device on the master track (download from https://talkback.createwcare.com/downloads/talkback-bridge-v1.5.amxd if needed)
 - Restart Claude Desktop (if configured)
 - Try asking: "What's happening in my Ableton session?"
 
