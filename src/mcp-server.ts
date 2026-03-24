@@ -1,11 +1,45 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { WsBridge } from "./ws-bridge.js";
-import { assembleContext } from "./context-assembler.js";
+import { assembleContext, assembleTrack } from "./context-assembler.js";
 import { getPluginLibrary } from "./plugin-library.js";
 import { runHeuristics } from "./heuristics/index.js";
 import { formatSpectralSummary } from "./spectral.js";
 import { humanToRaw } from "./param-maps/index.js";
+import type { RawTrack, RawDevice } from "./types.js";
+
+// ============================================================
+// Helpers
+// ============================================================
+
+const MIN_BRIDGE_VERSION = "1.6.0";
+
+/**
+ * Find a device on a track by name, returning its ID and className.
+ * Works with both full device arrays (from detail cache) and
+ * lightweight deviceNames arrays (from periodic snapshots).
+ */
+function findDeviceOnTrack(
+  track: RawTrack,
+  deviceName: string,
+): { deviceId: string; className: string | null } | null {
+  // Try full device data first (available when detail cache is warm)
+  const devices: RawDevice[] | undefined = (track as any).devices;
+  if (Array.isArray(devices)) {
+    const full = devices.find(
+      (d) => d.name.toLowerCase() === deviceName.toLowerCase(),
+    );
+    if (full) return { deviceId: full.id, className: full.className };
+  }
+
+  // Fall back to deviceNames from lightweight snapshot
+  const names: string[] = (track as any).deviceNames ?? [];
+  const idx = names.findIndex(
+    (n) => n.toLowerCase() === deviceName.toLowerCase(),
+  );
+  if (idx === -1) return null;
+  return { deviceId: `device_${idx}`, className: null };
+}
 
 // ============================================================
 // System prompt — prepended to session context responses
@@ -73,12 +107,31 @@ export function createMcpServer(bridge: WsBridge): McpServer {
           ],
         };
       }
-      return {
-        content: [
-          { type: "text" as const, text: SYSTEM_PROMPT },
-          { type: "text" as const, text: JSON.stringify(context, null, 2) },
-        ],
-      };
+
+      const contentParts: { type: "text"; text: string }[] = [
+        { type: "text" as const, text: SYSTEM_PROMPT },
+      ];
+
+      // Warn if bridge is outdated or version unknown
+      const bv = bridge.perf.bridgeVersion;
+      if (!bv) {
+        contentParts.push({
+          type: "text" as const,
+          text: `⚠ Bridge version unknown — the M4L device may be outdated. Ask the user to update to v${MIN_BRIDGE_VERSION}+ from talkback.createwcare.com/downloads for full device parameter support.`,
+        });
+      } else if (bv < MIN_BRIDGE_VERSION) {
+        contentParts.push({
+          type: "text" as const,
+          text: `⚠ Bridge v${bv} is outdated — update the M4L device to v${MIN_BRIDGE_VERSION}+ from talkback.createwcare.com/downloads for full device parameter support.`,
+        });
+      }
+
+      contentParts.push({
+        type: "text" as const,
+        text: JSON.stringify(context, null, 2),
+      });
+
+      return { content: contentParts };
     },
   );
 
@@ -90,23 +143,24 @@ export function createMcpServer(bridge: WsBridge): McpServer {
     "Returns full detail for a specific track including all devices, every parameter in human-readable units, and per-device observations.",
     { track_name: z.string().describe("Track name (case-insensitive match)") },
     async ({ track_name }) => {
-      const context = assembleContext(bridge.cache);
-      if (!context) {
+      if (!bridge.cache.raw) {
         return {
           content: [{ type: "text" as const, text: "No session data available." }],
         };
       }
 
       const lower = track_name.toLowerCase();
-      const allTracks = [
-        ...context.tracks,
-        ...context.returnTracks,
-        context.masterTrack,
+      const allRawTracks = [
+        ...bridge.cache.raw.tracks,
+        ...bridge.cache.raw.returnTracks,
+        bridge.cache.raw.masterTrack,
       ];
-      const track = allTracks.find((t) => t.name.toLowerCase() === lower);
+      const rawTrack = allRawTracks.find(
+        (t) => t.name.toLowerCase() === lower,
+      );
 
-      if (!track) {
-        const names = allTracks.map((t) => t.name).join(", ");
+      if (!rawTrack) {
+        const names = allRawTracks.map((t) => t.name).join(", ");
         return {
           content: [
             {
@@ -117,9 +171,38 @@ export function createMcpServer(bridge: WsBridge): McpServer {
         };
       }
 
+      // Request full device detail from bridge (skip if bridge is known to be outdated)
+      let enrichedTrack: RawTrack = rawTrack;
+      const bridgeSupportsDetail = bridge.perf.bridgeVersion != null
+        && bridge.perf.bridgeVersion >= MIN_BRIDGE_VERSION;
+      if (bridgeSupportsDetail) {
+        try {
+          const devices = await bridge.requestTrackDetail(rawTrack.id);
+          enrichedTrack = { ...rawTrack, devices } as RawTrack;
+        } catch {
+          // Timeout or disconnected — fall through to lightweight assembly
+        }
+      }
+
+      // Build name maps for assembly
+      const returnTrackNames = new Map<string, string>();
+      for (const rt of bridge.cache.raw.returnTracks) {
+        returnTrackNames.set(rt.id, rt.name);
+      }
+      const trackNameMap = new Map<string, string>();
+      for (const t of bridge.cache.raw.tracks) {
+        trackNameMap.set(t.id, t.name);
+      }
+
+      const semanticTrack = assembleTrack(
+        enrichedTrack,
+        returnTrackNames,
+        trackNameMap,
+      );
+
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify(track, null, 2) },
+          { type: "text" as const, text: JSON.stringify(semanticTrack, null, 2) },
         ],
       };
     },
@@ -261,10 +344,15 @@ export function createMcpServer(bridge: WsBridge): McpServer {
         };
       }
 
-      const device = track.devices.find(
-        (d) => d.name.toLowerCase() === device_name.toLowerCase(),
-      );
-      if (!device) {
+      // Check detail cache for richer device data (className for accurate conversion)
+      const cached = bridge.detailCache.get(track.id);
+      let enrichedTrack = track;
+      if (cached) {
+        enrichedTrack = { ...track, devices: cached.devices } as RawTrack;
+      }
+
+      const found = findDeviceOnTrack(enrichedTrack, device_name);
+      if (!found) {
         return {
           content: [
             {
@@ -276,7 +364,9 @@ export function createMcpServer(bridge: WsBridge): McpServer {
       }
 
       // Convert human value to raw
-      let rawValue = humanToRaw(device.className, parameter_name, value, unit);
+      let rawValue = found.className
+        ? humanToRaw(found.className, parameter_name, value, unit)
+        : null;
       if (rawValue === null) {
         // Fallback: assume 0-100 percent mapping
         rawValue = unit === "percent" ? value / 100 : value;
@@ -288,7 +378,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
       const sent = bridge.sendCommand({
         type: "set_parameter",
         trackId: track.id,
-        deviceId: device.id,
+        deviceId: found.deviceId,
         parameterName: parameter_name,
         value: rawValue,
       });
@@ -344,10 +434,8 @@ export function createMcpServer(bridge: WsBridge): McpServer {
         };
       }
 
-      const device = track.devices.find(
-        (d) => d.name.toLowerCase() === device_name.toLowerCase(),
-      );
-      if (!device) {
+      const found = findDeviceOnTrack(track, device_name);
+      if (!found) {
         return {
           content: [
             {
@@ -361,7 +449,7 @@ export function createMcpServer(bridge: WsBridge): McpServer {
       const sent = bridge.sendCommand({
         type: "set_device_active",
         trackId: track.id,
-        deviceId: device.id,
+        deviceId: found.deviceId,
         isActive: active,
       });
 
@@ -520,17 +608,33 @@ export function createMcpServer(bridge: WsBridge): McpServer {
       const snapshotKb = (p.snapshotBytes / 1024).toFixed(1);
 
       const lines = [
+        `Bridge version: ${p.bridgeVersion ?? "unknown"}`,
         `Poll time: ${p.lastPollMs}ms (avg ${p.avgPollMs}ms, max ${p.maxPollMs}ms over ${p.pollCount} polls)`,
         `Snapshot size: ${snapshotKb}KB (${p.snapshotBytes} bytes)`,
         `Tracks in snapshot: ${p.trackCount}`,
         `LiveAPI cache: ${p.apiCacheSize} objects`,
         `Last poll was structure refresh: ${p.lastStructureRefresh}`,
+      ];
+
+      if (!p.bridgeVersion) {
+        lines.push(
+          ``,
+          `⚠ Bridge version unknown — update the M4L device to v${MIN_BRIDGE_VERSION}+ from talkback.createwcare.com/downloads`,
+        );
+      } else if (p.bridgeVersion < MIN_BRIDGE_VERSION) {
+        lines.push(
+          ``,
+          `⚠ Bridge v${p.bridgeVersion} is outdated — update to v${MIN_BRIDGE_VERSION}+ from talkback.createwcare.com/downloads`,
+        );
+      }
+
+      lines.push(
         ``,
         `Benchmarks:`,
         `  Poll time < 50ms = excellent, 50-200ms = acceptable, >200ms = needs work`,
         `  Snapshot < 30KB = good, 30-100KB = fine at 10s intervals, >100KB = large`,
         `  Cache should stabilize after first few polls — growth = potential leak`,
-      ];
+      );
 
       return {
         content: [{ type: "text" as const, text: lines.join("\n") }],

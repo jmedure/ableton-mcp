@@ -7,6 +7,7 @@ import type {
   BridgeCommand,
   SpectralSnapshot,
   BridgePerf,
+  RawDevice,
 } from "./types.js";
 
 export class WsBridge extends EventEmitter {
@@ -14,6 +15,10 @@ export class WsBridge extends EventEmitter {
   private m4lSocket: WebSocket | null = null;
   private pendingSpectralResolve: ((data: SpectralSnapshot) => void) | null =
     null;
+  private pendingDetailResolves = new Map<
+    string,
+    (devices: RawDevice[]) => void
+  >();
 
   readonly cache: SessionCache = {
     raw: null,
@@ -30,7 +35,14 @@ export class WsBridge extends EventEmitter {
     trackCount: 0,
     snapshotBytes: 0,
     lastStructureRefresh: false,
+    bridgeVersion: null,
   };
+
+  /** Cached device detail responses, keyed by trackId. TTL: 30 seconds. */
+  readonly detailCache = new Map<
+    string,
+    { devices: RawDevice[]; timestamp: number }
+  >();
 
   async start(port: number): Promise<void> {
     // Kill any stale process on this port before binding
@@ -111,6 +123,10 @@ export class WsBridge extends EventEmitter {
       this.cache.raw = snapshot.payload;
       this.cache.lastUpdated = snapshot.timestamp;
 
+      // Read bridge version from payload (v1.6+)
+      this.perf.bridgeVersion =
+        ((snapshot.payload as any).bridgeVersion as string) ?? null;
+
       // Capture perf metrics from the device
       if (typed._perf) {
         this.perf.lastPollMs = (typed._perf.pollMs as number) ?? 0;
@@ -132,6 +148,24 @@ export class WsBridge extends EventEmitter {
       }
       this.emit("spectral", spectral.data);
     } else if (typed.type === "command_result") {
+      // Handle detail responses from bridge (v1.6+)
+      const result = msg as any;
+      if (
+        result.command === "request_detail" &&
+        result.success &&
+        Array.isArray(result.devices)
+      ) {
+        const trackId = result.trackId as string;
+        this.detailCache.set(trackId, {
+          devices: result.devices as RawDevice[],
+          timestamp: Date.now(),
+        });
+        const resolve = this.pendingDetailResolves.get(trackId);
+        if (resolve) {
+          this.pendingDetailResolves.delete(trackId);
+          resolve(result.devices as RawDevice[]);
+        }
+      }
       this.emit("command_result", msg);
     }
   }
@@ -161,6 +195,35 @@ export class WsBridge extends EventEmitter {
         clearTimeout(timer);
         resolve(data);
       };
+    });
+  }
+
+  requestTrackDetail(
+    trackId: string,
+    timeoutMs = 5000,
+  ): Promise<RawDevice[]> {
+    return new Promise((resolve, reject) => {
+      // Check cache first (30s TTL)
+      const cached = this.detailCache.get(trackId);
+      if (cached && Date.now() - cached.timestamp < 30_000) {
+        resolve(cached.devices);
+        return;
+      }
+
+      if (!this.sendCommand({ type: "request_detail", trackId })) {
+        reject(new Error("M4L bridge not connected"));
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        this.pendingDetailResolves.delete(trackId);
+        reject(new Error("Track detail request timed out"));
+      }, timeoutMs);
+
+      this.pendingDetailResolves.set(trackId, (devices) => {
+        clearTimeout(timer);
+        resolve(devices);
+      });
     });
   }
 

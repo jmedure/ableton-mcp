@@ -133,7 +133,8 @@ export type BridgeCommand =
   | CreateGroupCommand
   | SetRoutingCommand
   | AddDeviceCommand
-  | RequestSpectralCommand;
+  | RequestSpectralCommand
+  | RequestDetailCommand;
 
 export interface SetParameterCommand {
   type: "set_parameter";
@@ -172,6 +173,11 @@ export interface AddDeviceCommand {
 export interface RequestSpectralCommand {
   type: "request_spectral";
   source: string; // "master" or track id
+}
+
+export interface RequestDetailCommand {
+  type: "request_detail";
+  trackId: string;
 }
 
 // ============================================================
@@ -213,6 +219,7 @@ export interface BridgePerf {
   trackCount: number;       // total tracks in snapshot
   snapshotBytes: number;    // last WebSocket message size
   lastStructureRefresh: boolean; // was the last poll a full structure read
+  bridgeVersion: string | null;  // version reported by M4L device
 }
 
 // ============================================================

@@ -35,7 +35,7 @@ Requires [Node.js 18+](https://nodejs.org). See the [full setup guide](https://t
 
 ### 1. Install the Max for Live device
 
-Download [talkback-bridge-v1.5.amxd](https://talkback.createwcare.com/downloads/talkback-bridge-v1.5.amxd) and drop it onto your **master track** in Ableton. Make sure the device is toggled on.
+Download [talkback-bridge (latest)](https://talkback.createwcare.com/downloads/talkback-bridge-latest.amxd) and drop it onto your **master track** in Ableton. Make sure the device is toggled on.
 
 ### 2. Add the MCP server
 

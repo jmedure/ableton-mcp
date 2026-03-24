@@ -87,7 +87,7 @@ function assembleDevice(device: RawDevice): SemanticDevice {
 // Track assembly
 // ============================================================
 
-function assembleTrack(
+export function assembleTrack(
   track: RawTrack,
   returnTrackNames: Map<string, string>,
   trackNameMap: Map<string, string>,
@@ -109,10 +109,10 @@ function assembleTrack(
   // If we only have deviceNames (lightweight snapshot), show them as simple entries
   const deviceNameList: string[] = (track as any).deviceNames ?? [];
   if (devices.length === 0 && deviceNameList.length > 0) {
-    for (const dn of deviceNameList) {
+    for (let i = 0; i < deviceNameList.length; i++) {
       devices.push({
-        id: dn,
-        name: dn,
+        id: `device_${i}`,
+        name: deviceNameList[i],
         active: true,
         isThirdParty: false,
         parameters: {},
