@@ -1,6 +1,6 @@
 {
   "name": "talkback-mcp",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "MCP server built to connect LLMs to your Ableton Live session (but it's not lame...)",
   "mcpName": "io.github.jmedure/talkback",
   "repository": {
