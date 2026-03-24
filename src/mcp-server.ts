@@ -12,7 +12,7 @@ import type { RawTrack, RawDevice } from "./types.js";
 // Helpers
 // ============================================================
 
-const MIN_BRIDGE_VERSION = "1.6.0";
+const MIN_BRIDGE_VERSION = "1.8.0";
 
 /**
  * Find a device on a track by name, returning its ID and className.
